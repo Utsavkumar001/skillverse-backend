@@ -12,10 +12,11 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'https://skillverse-frontend-five.vercel.app/',
+    'https://skillverse-frontend-five.vercel.app',
   ],
   credentials: true,
 }));
+
 app.use(express.json());
 
 // Routes
