@@ -130,6 +130,26 @@ router.get('/my-agents', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/chat/:agentId/history
+router.get('/:agentId/history', authMiddleware, async (req, res) => {
+  try {
+    const chatHistory = await ChatHistory.findOne({
+      userId: req.user.id,
+      agentId: req.params.agentId,
+    });
+
+    if (!chatHistory) return res.json({ messages: [], trialCount: 0, isPaid: false });
+
+    res.json({
+      messages: chatHistory.messages,
+      trialCount: chatHistory.trialCount,
+      isPaid: chatHistory.isPaid,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 
 module.exports = router;
