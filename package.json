@@ -1,0 +1,31 @@
+{
+  "name": "skillverse-backend",
+  "version": "1.0.0",
+  "main": "seed.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Utsavkumar001/skillverse-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Utsavkumar001/skillverse-backend/issues"
+  },
+  "homepage": "https://github.com/Utsavkumar001/skillverse-backend#readme",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.0",
+    "express": "^5.2.1",
+    "groq-sdk": "^1.1.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1",
+    "razorpay": "^2.9.6"
+  }
+}
