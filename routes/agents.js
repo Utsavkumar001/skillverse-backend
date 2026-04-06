@@ -88,4 +88,30 @@ router.patch('/:id/publish', authMiddleware, async (req, res) => {
   }
 });
 
+// PATCH /api/agents/:id — edit agent
+router.patch('/:id', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    if (agent.creatorId.toString() !== req.user.id)
+      return res.status(403).json({ message: 'Not your agent' });
+
+    const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags } = req.body;
+
+    agent.title = title || agent.title;
+    agent.description = description || agent.description;
+    agent.category = category || agent.category;
+    agent.systemPrompt = systemPrompt || agent.systemPrompt;
+    agent.examplePrompts = examplePrompts || agent.examplePrompts;
+    agent.price = price !== undefined ? price : agent.price;
+    agent.pricingModel = pricingModel || agent.pricingModel;
+    agent.tags = tags || agent.tags;
+
+    await agent.save();
+    res.json(agent);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
