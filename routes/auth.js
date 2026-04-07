@@ -70,6 +70,38 @@ router.patch('/verify/:userId', authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// GET /api/auth/stats
+router.get('/stats', authMiddleware, async (req, res) => {
+  try {
+    const ChatHistory = require('../models/ChatHistory');
+    const Agent = require('../models/Agent');
+
+    const allChats = await ChatHistory.find({ userId: req.user.id });
+    const agentsUsed = allChats.length;
+    const agentsPurchased = allChats.filter((c) => c.isPaid).length;
+    const agentsCreated = await Agent.countDocuments({ creatorId: req.user.id });
+
+    res.json({ agentsUsed, agentsPurchased, agentsCreated });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/auth/update-profile
+router.patch('/update-profile', authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { name },
+      { new: true }
+    ).select('-password');
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
  
 module.exports = router;
  
