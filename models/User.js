@@ -7,7 +7,9 @@ const UserSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: ['buyer', 'creator', 'both'], default: 'buyer' },
     avatar: { type: String, default: '' },
-    isVerified: { type: Boolean, default: false }, // ← yeh add karo
+    isVerified: { type: Boolean, default: false }, 
+    resetToken: { type: String, default: null },
+    resetTokenExpiry: { type: Date, default: null },
   },
   { timestamps: true }
 );
