@@ -167,6 +167,44 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
+// GET /api/auth/earnings
+router.get('/earnings', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('walletBalance totalEarned withdrawalRequests');
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/withdraw
+router.post('/withdraw', authMiddleware, async (req, res) => {
+  try {
+    const { amount, upiId } = req.body;
+    const user = await User.findById(req.user.id);
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.walletBalance < amount) {
+      return res.status(400).json({ message: 'Insufficient balance' });
+    }
+    if (amount < 100) {
+      return res.status(400).json({ message: 'Minimum withdrawal is ₹100' });
+    }
+
+    // Deduct from wallet and add withdrawal request
+    user.walletBalance -= amount;
+    user.withdrawalRequests.push({ amount, upiId, status: 'pending' });
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Withdrawal request submitted! We will process within 3-5 business days.',
+      newBalance: user.walletBalance,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
  
 module.exports = router;
  

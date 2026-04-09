@@ -10,7 +10,18 @@ const UserSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false }, 
     resetToken: { type: String, default: null },
     resetTokenExpiry: { type: Date, default: null },
+    walletBalance: { type: Number, default: 0 },
+    totalEarned: { type: Number, default: 0 },
+    withdrawalRequests: [
+      {
+        amount: { type: Number },
+        status: { type: String, enum: ['pending', 'paid', 'rejected'], default: 'pending' },
+        requestedAt: { type: Date, default: Date.now },
+        upiId: { type: String },
+      }
+    ],
   },
+  
   { timestamps: true }
 );
 
