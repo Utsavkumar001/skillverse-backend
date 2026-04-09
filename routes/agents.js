@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Agent = require('../models/Agent');
 const authMiddleware = require('../middleware/auth');
+const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
+
 
 // GET /api/agents — list all published agents (with search + filter)
 router.get('/', async (req, res) => {
@@ -60,6 +62,7 @@ router.post('/', authMiddleware, async (req, res) => {
       systemPrompt,
       examplePrompts,
       price: price || 0,
+      capabilities: capabilities || [],
       pricingModel: pricingModel || 'free',
       tags,
       creatorId: req.user.id,
@@ -106,6 +109,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     agent.price = price !== undefined ? price : agent.price;
     agent.pricingModel = pricingModel || agent.pricingModel;
     agent.tags = tags || agent.tags;
+    agent.capabilities = capabilities || agent.capabilities;
 
     await agent.save();
     res.json(agent);

@@ -19,6 +19,8 @@ const AgentSchema = new mongoose.Schema(
     isPublished: { type: Boolean, default: false },
     averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
+    capabilities: [{ type: String }],
+
   },
   { timestamps: true }
 );
