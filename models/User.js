@@ -20,6 +20,8 @@ const UserSchema = new mongoose.Schema(
         upiId: { type: String },
       }
     ],
+    isEmailVerified: { type: Boolean, default: false },
+    emailVerifyToken: { type: String, default: null },
   },
   
   { timestamps: true }
