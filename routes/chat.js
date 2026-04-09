@@ -150,6 +150,35 @@ router.get('/:agentId/history', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/chat/:agentId/embed — guest chat for embedded widget
+router.post('/:agentId/embed', async (req, res) => {
+  try {
+    const { message, history } = req.body;
+    const agent = await Agent.findById(req.params.agentId);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+
+    const messages = [
+      { role: 'system', content: agent.systemPrompt },
+      ...(history || []),
+      { role: 'user', content: message },
+    ];
+
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      max_tokens: 600,
+    });
+
+    const reply = response.choices[0].message.content;
+    agent.usageCount += 1;
+    await agent.save();
+
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 
 module.exports = router;

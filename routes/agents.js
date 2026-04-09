@@ -118,4 +118,63 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/agents/:id/analytics
+router.get('/:id/analytics', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    if (agent.creatorId.toString() !== req.user.id)
+      return res.status(403).json({ message: 'Not your agent' });
+
+    const ChatHistory = require('../models/ChatHistory');
+    const Review = require('../models/Review');
+
+    const chats = await ChatHistory.find({ agentId: req.params.id });
+    const reviews = await Review.find({ agentId: req.params.id });
+
+    // Messages per day (last 7 days)
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+
+      const msgs = chats.reduce((count, chat) => {
+        return count + chat.messages.filter(m =>
+          new Date(m.timestamp) >= dayStart &&
+          new Date(m.timestamp) <= dayEnd &&
+          m.role === 'user'
+        ).length;
+      }, 0);
+
+      last7Days.push({
+        date: dayStart.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
+        messages: msgs,
+      });
+    }
+
+    const paidUsers = chats.filter(c => c.isPaid).length;
+    const totalUsers = chats.length;
+    const totalMessages = chats.reduce((sum, c) => sum + Math.floor(c.messages.length / 2), 0);
+    const revenue = paidUsers * agent.price;
+    const avgRating = reviews.length
+      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+      : 0;
+
+    res.json({
+      totalUsers,
+      paidUsers,
+      totalMessages,
+      revenue,
+      avgRating,
+      reviewCount: reviews.length,
+      usageCount: agent.usageCount,
+      last7Days,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
