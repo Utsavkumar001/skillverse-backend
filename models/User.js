@@ -22,6 +22,9 @@ const UserSchema = new mongoose.Schema(
     ],
     isEmailVerified: { type: Boolean, default: false },
     emailVerifyToken: { type: String, default: null },
+    role: { type: String, enum: ['buyer', 'creator', 'both', 'admin'], default: 'buyer' },
+    isBanned: { type: Boolean, default: false },
+    banReason: { type: String, default: null },
   },
   
   { timestamps: true }
