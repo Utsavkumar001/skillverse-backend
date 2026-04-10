@@ -184,4 +184,36 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/agents/:id/clone
+router.post('/:id/clone', authMiddleware, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ message: 'Please verify your email first.' });
+    }
+
+    const original = await Agent.findById(req.params.id);
+    if (!original) return res.status(404).json({ message: 'Agent not found' });
+
+    const cloned = await Agent.create({
+      title: `${original.title} (Copy)`,
+      description: original.description,
+      category: original.category,
+      systemPrompt: original.systemPrompt,
+      examplePrompts: original.examplePrompts,
+      capabilities: original.capabilities,
+      price: original.price,
+      pricingModel: original.pricingModel,
+      tags: original.tags,
+      creatorId: req.user.id,
+      isPublished: false,
+    });
+
+    res.status(201).json(cloned);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
