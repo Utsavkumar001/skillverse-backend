@@ -18,6 +18,15 @@ const CREATOR_SHARE = 0.80; // 80% creator
 // POST /api/payment/create-order
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ 
+        message: 'Please verify your email before making payments.',
+        code: 'EMAIL_NOT_VERIFIED'
+      });
+    }
+
     const { amount, agentId } = req.body;
 
     const order = await razorpay.orders.create({

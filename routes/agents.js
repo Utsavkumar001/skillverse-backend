@@ -109,6 +109,16 @@ router.get('/:id', async (req, res) => {
 // POST /api/agents — create agent (creator only)
 router.post('/', authMiddleware, async (req, res) => {
   try {
+    // Email verification check
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        message: 'Please verify your email before creating agents.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+    }
+
     const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
 
     const agent = await Agent.create({
