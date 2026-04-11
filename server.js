@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+app.set('trust proxy', 1); // ← SABSE PEHLE
 
 // Middleware
 app.use(cors({
@@ -42,7 +43,7 @@ const authLimiter = rateLimit({
 // Chat rate limit — AI spam rokna
 const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 20,
+  max: 35,
   message: { message: 'Too many messages, slow down!' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -52,7 +53,6 @@ app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/chat', chatLimiter);
-
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
