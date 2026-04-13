@@ -181,6 +181,10 @@ router.post('/:agentId', authMiddleware, async (req, res) => {
       isPaid: chatHistory.isPaid,
     });
   } catch (err) {
+    console.error('CHAT ERROR:', err.status, err.message, err.error);
+    if (err.status === 429) {
+      return res.status(429).json({ message: 'AI is busy, please wait and try again.' });
+    }
     res.status(500).json({ message: err.message });
   }
 });
