@@ -73,9 +73,12 @@ router.post('/:agentId/embed', async (req, res) => {
     const agent = await Agent.findById(req.params.agentId);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
+    // Sirf last 10 messages bhejo Groq ko
+    const recentHistory = (history || []).slice(-10);
+    
     const messages = [
       { role: 'system', content: agent.systemPrompt },
-      ...(history || []),
+      ...recentHistory,
       { role: 'user', content: message },
     ];
 
