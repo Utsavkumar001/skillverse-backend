@@ -145,7 +145,10 @@ router.post('/:agentId', authMiddleware, async (req, res) => {
     }
 
     // ← YEH 3 LINES CHANGE HUI HAIN
-    const recentHistory = (history || []).slice(-6);
+    const recentHistory = (history || []).slice(-6).map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    }));
 
     const messages = [
       { role: 'system', content: agent.systemPrompt },
