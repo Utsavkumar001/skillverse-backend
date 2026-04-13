@@ -74,7 +74,7 @@ router.post('/:agentId/embed', async (req, res) => {
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
     // Sirf last 10 messages bhejo Groq ko
-    const recentHistory = (history || []).slice(-10);
+    const recentHistory = (history || []).slice(-6);
     
     const messages = [
       { role: 'system', content: agent.systemPrompt },
@@ -83,9 +83,9 @@ router.post('/:agentId/embed', async (req, res) => {
     ];
 
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages,
-      max_tokens: 600,
+      max_tokens: 1024,
     });
 
     const reply = response.choices[0].message.content;
@@ -135,7 +135,6 @@ router.post('/:agentId', authMiddleware, async (req, res) => {
       });
     }
 
-    // Trial limit — sirf paid agents ke liye
     if (agent.price > 0 && !chatHistory.isPaid) {
       if (chatHistory.trialCount >= FREE_TRIAL_LIMIT) {
         return res.status(403).json({
@@ -145,21 +144,23 @@ router.post('/:agentId', authMiddleware, async (req, res) => {
       }
     }
 
+    // ← YEH 3 LINES CHANGE HUI HAIN
+    const recentHistory = (history || []).slice(-6);
+
     const messages = [
       { role: 'system', content: agent.systemPrompt },
-      ...(history || []),
+      ...recentHistory,
       { role: 'user', content: message },
     ];
 
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',  // ← CHANGE
       messages,
-      max_tokens: 800,
+      max_tokens: 1024,  // ← CHANGE
     });
 
     const reply = response.choices[0].message.content;
 
-    // Trial count badhao sirf paid agents ke liye
     if (agent.price > 0 && !chatHistory.isPaid) {
       chatHistory.trialCount += 1;
     }
