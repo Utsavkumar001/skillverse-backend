@@ -235,14 +235,19 @@ router.patch('/:id/submit-review', authMiddleware, async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    if (agent.creatorId.toString() !== req.user.id) {
+    
+    // Debug log
+    console.log('Agent creatorId:', agent.creatorId.toString());
+    console.log('Request user id:', req.user.id);
+    
+    if (agent.creatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not your agent' });
     }
 
     agent.status = 'pending_review';
     await agent.save();
 
-    res.json({ message: 'Agent submitted for review!', agent });
+    res.json({ message: 'Submitted for review!', agent });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
