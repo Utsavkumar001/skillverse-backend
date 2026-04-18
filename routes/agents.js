@@ -3,7 +3,7 @@ const router = express.Router();
 const Agent = require('../models/Agent');
 const authMiddleware = require('../middleware/auth');
 
-// GET /api/agents — list all published agents (with search + filter)
+// GET /api/agents — list all published agents
 router.get('/', async (req, res) => {
   try {
     const { category, search, sort } = req.query;
@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/agents/creator/mine — get creator's own agents
+// GET /api/agents/creator/mine
 router.get('/creator/mine', authMiddleware, async (req, res) => {
   try {
     const agents = await Agent.find({ creatorId: req.user.id }).sort({ createdAt: -1 });
@@ -39,10 +39,15 @@ router.get('/creator/mine', authMiddleware, async (req, res) => {
 // GET /api/agents/:id/analytics
 router.get('/:id/analytics', authMiddleware, async (req, res) => {
   try {
+    const User = require('../models/User');
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    if (agent.creatorId.toString() !== req.user.id)
+
+    const user = await User.findById(req.user.id);
+
+    if (agent.creatorId.toString() !== req.user.id.toString() && user.role !== 'admin') {
       return res.status(403).json({ message: 'Not your agent' });
+    }
 
     const ChatHistory = require('../models/ChatHistory');
     const Review = require('../models/Review');
@@ -94,7 +99,7 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/agents/:id — single agent detail
+// GET /api/agents/:id — single agent
 router.get('/:id', async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id)
@@ -106,12 +111,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/agents — create agent (creator only)
+// POST /api/agents — create agent
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    // Email verification check
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
+
     if (!user.isEmailVerified) {
       return res.status(403).json({
         message: 'Please verify your email before creating agents.',
@@ -120,11 +125,11 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     if (user.role !== 'creator' && user.role !== 'admin') {
-  return res.status(403).json({ 
-    message: 'Only creators can build agents.',
-    code: 'NOT_CREATOR'
-  });
-}
+      return res.status(403).json({
+        message: 'Only creators can build agents.',
+        code: 'NOT_CREATOR',
+      });
+    }
 
     const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
 
@@ -140,6 +145,7 @@ router.post('/', authMiddleware, async (req, res) => {
       tags,
       creatorId: req.user.id,
       isPublished: false,
+      status: 'draft',
     });
 
     res.status(201).json(agent);
@@ -148,24 +154,41 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// PATCH /api/agents/:id/publish — sirf admin
 router.patch('/:id/publish', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
-    
-    // Sirf admin publish kar sakta hai
+
     if (user.role !== 'admin') {
-      return res.status(403).json({ 
-        message: 'Agents require admin approval before publishing.' 
-      });
+      return res.status(403).json({ message: 'Only admin can publish agents.' });
     }
 
     const agent = await Agent.findByIdAndUpdate(
       req.params.id,
-      { isPublished: true },
+      { isPublished: true, status: 'published' },
       { new: true }
     );
     res.json(agent);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/agents/:id/submit-review
+router.patch('/:id/submit-review', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+
+    if (agent.creatorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: 'Not your agent' });
+    }
+
+    agent.status = 'pending_review';
+    await agent.save();
+
+    res.json({ message: 'Submitted for review!', agent });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -176,8 +199,10 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    if (agent.creatorId.toString() !== req.user.id)
+
+    if (agent.creatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not your agent' });
+    }
 
     const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
 
@@ -203,6 +228,7 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
+
     if (!user.isEmailVerified) {
       return res.status(403).json({ message: 'Please verify your email first.' });
     }
@@ -222,6 +248,7 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
       tags: original.tags,
       creatorId: req.user.id,
       isPublished: false,
+      status: 'draft',
     });
 
     res.status(201).json(cloned);
@@ -230,61 +257,19 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
   }
 });
 
-// PATCH /api/agents/:id/submit-review
-router.patch('/:id/submit-review', authMiddleware, async (req, res) => {
-  try {
-    const agent = await Agent.findById(req.params.id);
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    
-    // Debug log
-    console.log('Agent creatorId:', agent.creatorId.toString());
-    console.log('Request user id:', req.user.id);
-    
-    if (agent.creatorId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: 'Not your agent' });
-    }
-
-    agent.status = 'pending_review';
-    await agent.save();
-
-    res.json({ message: 'Submitted for review!', agent });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Publish route — sirf admin
-router.patch('/:id/publish', authMiddleware, async (req, res) => {
-  try {
-    const User = require('../models/User');
-    const user = await User.findById(req.user.id);
-    if (user.role !== 'admin') {
-      return res.status(403).json({ message: 'Only admin can publish agents.' });
-    }
-    const agent = await Agent.findByIdAndUpdate(
-      req.params.id,
-      { isPublished: true, status: 'published' },
-      { new: true }
-    );
-    res.json(agent);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
+// DELETE /api/agents/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
+    const User = require('../models/User');
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    
-    const User = require('../models/User');
+
     const user = await User.findById(req.user.id);
-    
-    // Creator apna agent delete kar sake, admin koi bhi
-    if (agent.creatorId.toString() !== req.user.id && user.role !== 'admin') {
+
+    if (agent.creatorId.toString() !== req.user.id.toString() && user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized' });
     }
-    
+
     await Agent.findByIdAndDelete(req.params.id);
     res.json({ message: 'Agent deleted' });
   } catch (err) {
