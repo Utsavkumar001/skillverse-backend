@@ -119,6 +119,13 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
+    if (user.role !== 'creator' && user.role !== 'admin') {
+  return res.status(403).json({ 
+    message: 'Only creators can build agents.',
+    code: 'NOT_CREATOR'
+  });
+}
+
     const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
 
     const agent = await Agent.create({
@@ -141,17 +148,24 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// PATCH /api/agents/:id/publish — publish agent
 router.patch('/:id/publish', authMiddleware, async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id);
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    if (agent.creatorId.toString() !== req.user.id)
-      return res.status(403).json({ message: 'Not your agent' });
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    
+    // Sirf admin publish kar sakta hai
+    if (user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: 'Agents require admin approval before publishing.' 
+      });
+    }
 
-    agent.isPublished = true;
-    await agent.save();
-    res.json({ message: 'Agent published', agent });
+    const agent = await Agent.findByIdAndUpdate(
+      req.params.id,
+      { isPublished: true },
+      { new: true }
+    );
+    res.json(agent);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -215,5 +229,44 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// PATCH /api/agents/:id/submit-review
+router.patch('/:id/submit-review', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    if (agent.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not your agent' });
+    }
+
+    agent.status = 'pending_review';
+    await agent.save();
+
+    res.json({ message: 'Agent submitted for review!', agent });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Publish route — sirf admin
+router.patch('/:id/publish', authMiddleware, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    if (user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can publish agents.' });
+    }
+    const agent = await Agent.findByIdAndUpdate(
+      req.params.id,
+      { isPublished: true, status: 'published' },
+      { new: true }
+    );
+    res.json(agent);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 
 module.exports = router;

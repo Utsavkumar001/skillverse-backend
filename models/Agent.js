@@ -20,6 +20,12 @@ const AgentSchema = new mongoose.Schema(
     averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
     capabilities: [{ type: String }],
+    status: { 
+  type: String, 
+  enum: ['draft', 'pending_review', 'published', 'rejected'], 
+  default: 'draft' 
+},
+
 
   },
   { timestamps: true }
