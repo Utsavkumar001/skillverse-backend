@@ -137,6 +137,10 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
       .select('-password -emailVerifyToken -resetToken -resetTokenExpiry');
+  
+    const userData = user.toObject();
+    userData.email = userData.email.toLowerCase();
+    
     res.json(user);
   } catch (err) {
     res.status(500).json({ message: err.message });
