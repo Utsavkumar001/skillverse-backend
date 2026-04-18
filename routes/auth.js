@@ -3,27 +3,48 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
-const { Resend } = require('resend');
 const { body, validationResult } = require('express-validator');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Nodemailer transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS,
+  },
+});
 
-// Register validation middleware
+// Helper — email bhejne ka function
+const sendEmail = async (to, subject, html) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"SkillVerse" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log('Email sent successfully:', info.messageId, 'to:', to);
+  } catch (err) {
+    console.error('Email send error:', err.message);
+    throw err;
+  }
+};
+
+// Validation middlewares
 const validateRegister = [
   body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Invalid email address'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
 ];
 
-// Login validation middleware
 const validateLogin = [
   body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
-// Validation result checker
 const checkValidation = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -55,21 +76,20 @@ router.post('/register', validateRegister, checkValidation, async (req, res) => 
     // Send verification email
     try {
       const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerifyToken}`;
-      await resend.emails.send({
-        from: 'SkillVerse <onboarding@resend.dev>',
-        to: user.email,
-        subject: 'Verify your SkillVerse email',
-        html: `
-          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-            <h2 style="color: #111827;">Welcome to SkillVerse! 👋</h2>
-            <p style="color: #6B7280;">Click below to verify your email and get started.</p>
-            <a href="${verifyUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
-              Verify Email
-            </a>
-            <p style="color: #9CA3AF; font-size: 12px;">If you didn't create this account, ignore this email.</p>
-          </div>
-        `,
-      });
+      await sendEmail(
+        user.email,
+        'Verify your SkillVerse email',
+        `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #111827;">Welcome to SkillVerse! 👋</h2>
+          <p style="color: #6B7280;">Click below to verify your email and get started.</p>
+          <a href="${verifyUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
+            Verify Email
+          </a>
+          <p style="color: #9CA3AF; font-size: 12px;">If you didn't create this account, ignore this email.</p>
+        </div>
+        `
+      );
     } catch (emailErr) {
       console.error('Email send failed:', emailErr.message);
     }
@@ -106,23 +126,24 @@ router.post('/login', validateLogin, checkValidation, async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ message: 'Invalid credentials' });
 
-    // Ban check — yeh add karo
     if (user.isBanned) {
-      return res.status(403).json({ 
-        message: `Account banned: ${user.banReason || 'Violated terms of service'}` 
+      return res.status(403).json({
+        message: `Account banned: ${user.banReason || 'Violated terms of service'}`,
       });
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: '7d',
-    });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
       token,
       user: {
         id: user._id,
         name: user.name,
-        email: user.email,
+        email: user.email.toLowerCase(),
         role: user.role,
         isEmailVerified: user.isEmailVerified,
       },
@@ -137,11 +158,11 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
       .select('-password -emailVerifyToken -resetToken -resetTokenExpiry');
-  
+
     const userData = user.toObject();
     userData.email = userData.email.toLowerCase();
-    
-    res.json(user);
+
+    res.json(userData);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -176,19 +197,18 @@ router.post('/resend-verification', authMiddleware, async (req, res) => {
     await user.save();
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerifyToken}`;
-    await resend.emails.send({
-      from: 'SkillVerse <onboarding@resend.dev>',
-      to: user.email,
-      subject: 'Verify your SkillVerse email',
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="color: #111827;">Verify your email</h2>
-          <a href="${verifyUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
-            Verify Email
-          </a>
-        </div>
-      `,
-    });
+    await sendEmail(
+      user.email,
+      'Verify your SkillVerse email',
+      `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #111827;">Verify your email</h2>
+        <a href="${verifyUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
+          Verify Email
+        </a>
+      </div>
+      `
+    );
 
     res.json({ message: 'Verification email sent!' });
   } catch (err) {
@@ -295,21 +315,20 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
-    await resend.emails.send({
-      from: 'SkillVerse <onboarding@resend.dev>',
-      to: user.email,
-      subject: 'Reset your SkillVerse password',
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="color: #111827;">Reset your password</h2>
-          <p style="color: #6B7280;">This link expires in 1 hour.</p>
-          <a href="${resetUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
-            Reset Password
-          </a>
-          <p style="color: #9CA3AF; font-size: 12px;">If you didn't request this, ignore this email.</p>
-        </div>
-      `,
-    });
+    await sendEmail(
+      user.email,
+      'Reset your SkillVerse password',
+      `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #111827;">Reset your password</h2>
+        <p style="color: #6B7280;">This link expires in 1 hour.</p>
+        <a href="${resetUrl}" style="display: inline-block; background: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; margin: 16px 0;">
+          Reset Password
+        </a>
+        <p style="color: #9CA3AF; font-size: 12px;">If you didn't request this, ignore this email.</p>
+      </div>
+      `
+    );
 
     res.json({ message: 'Reset email sent!' });
   } catch (err) {
