@@ -272,6 +272,24 @@ router.patch('/:id/publish', authMiddleware, async (req, res) => {
   }
 });
 
-
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    
+    // Creator apna agent delete kar sake, admin koi bhi
+    if (agent.creatorId.toString() !== req.user.id && user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    
+    await Agent.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Agent deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
