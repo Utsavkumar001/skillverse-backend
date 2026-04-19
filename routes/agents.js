@@ -134,19 +134,25 @@ router.post('/', authMiddleware, async (req, res) => {
     const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
 
     const agent = await Agent.create({
-      title,
-      description,
-      category,
-      systemPrompt,
-      examplePrompts,
-      price: price || 0,
-      capabilities: capabilities || [],
-      pricingModel: pricingModel || 'free',
-      tags,
-      creatorId: req.user.id,
-      isPublished: false,
-      status: 'draft',
-    });
+    title,
+    description,
+    category,
+    systemPrompt: systemPrompt || '',
+    examplePrompts,
+    price: price || 0,
+    monthlyPrice: monthlyPrice || 0,
+    yearlyPrice: yearlyPrice || 0,
+    pricingModel: pricingModel || 'free',
+    freeQueriesPerDay: freeQueriesPerDay || 0,
+    freeQueriesPerMonth: freeQueriesPerMonth || 0,
+    agentType: agentType || 'internal',
+    externalApiUrl: externalApiUrl || '',
+    capabilities: capabilities || [],
+    tags,
+    creatorId: req.user.id,
+    isPublished: false,
+    status: 'draft',
+  });
 
     res.status(201).json(agent);
   } catch (err) {

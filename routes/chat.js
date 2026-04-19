@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Groq = require('groq-sdk');
+const axios = require('axios');
 const Agent = require('../models/Agent');
 const ChatHistory = require('../models/ChatHistory');
 const authMiddleware = require('../middleware/auth');
@@ -9,7 +10,93 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const FREE_TRIAL_LIMIT = 3;
 
-// GET /api/chat/my-agents — PEHLE specific routes
+// Helper — AI se reply lo (internal ya external)
+const getReply = async (agent, message, recentHistory) => {
+  // External agent
+  if (agent.agentType === 'external' && agent.externalApiUrl) {
+    const response = await axios.post(agent.externalApiUrl, {
+      message,
+      history: recentHistory,
+    });
+    return response.data.reply;
+  }
+
+  // Internal — Groq
+  const messages = [
+    { role: 'system', content: agent.systemPrompt },
+    ...recentHistory,
+    { role: 'user', content: message },
+  ];
+
+  const response = await groq.chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages,
+    max_tokens: 1024,
+  });
+
+  return response.choices[0].message.content;
+};
+
+// Helper — query limit check
+const checkQueryLimit = (agent, chatHistory) => {
+  // Free — no limit
+  if (agent.pricingModel === 'free') return { allowed: true };
+
+  // Paid — check if purchased
+  if (['one-time', 'monthly', 'yearly'].includes(agent.pricingModel)) {
+    if (chatHistory.isPaid) return { allowed: true };
+    // Free trial
+    if (chatHistory.trialCount >= FREE_TRIAL_LIMIT) {
+      return { allowed: false, trialEnded: true, message: 'Free trial ended. Purchase to continue.' };
+    }
+    return { allowed: true, isTrial: true };
+  }
+
+  // Freemium — check daily/monthly limits
+  if (agent.pricingModel === 'freemium') {
+    if (chatHistory.isPaid) return { allowed: true };
+
+    const now = new Date();
+
+    // Daily limit check
+    if (agent.freeQueriesPerDay > 0) {
+      const todayStart = new Date(now.setHours(0, 0, 0, 0));
+      const todayMessages = chatHistory.messages.filter(m =>
+        m.role === 'user' && new Date(m.timestamp) >= todayStart
+      ).length;
+
+      if (todayMessages >= agent.freeQueriesPerDay) {
+        return {
+          allowed: false,
+          trialEnded: true,
+          message: `Daily free limit of ${agent.freeQueriesPerDay} queries reached. Come back tomorrow or upgrade!`
+        };
+      }
+    }
+
+    // Monthly limit check
+    if (agent.freeQueriesPerMonth > 0) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthMessages = chatHistory.messages.filter(m =>
+        m.role === 'user' && new Date(m.timestamp) >= monthStart
+      ).length;
+
+      if (monthMessages >= agent.freeQueriesPerMonth) {
+        return {
+          allowed: false,
+          trialEnded: true,
+          message: `Monthly free limit of ${agent.freeQueriesPerMonth} queries reached. Upgrade to continue!`
+        };
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  return { allowed: true };
+};
+
+// GET /api/chat/my-agents
 router.get('/my-agents', authMiddleware, async (req, res) => {
   try {
     const histories = await ChatHistory.find({ userId: req.user.id })
@@ -73,22 +160,13 @@ router.post('/:agentId/embed', async (req, res) => {
     const agent = await Agent.findById(req.params.agentId);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
-    // Sirf last 10 messages bhejo Groq ko
-    const recentHistory = (history || []).slice(-6);
-    
-    const messages = [
-      { role: 'system', content: agent.systemPrompt },
-      ...recentHistory,
-      { role: 'user', content: message },
-    ];
+    const recentHistory = (history || []).slice(-6).map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    }));
 
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      messages,
-      max_tokens: 1024,
-    });
+    const reply = await getReply(agent, message, recentHistory);
 
-    const reply = response.choices[0].message.content;
     agent.usageCount += 1;
     await agent.save();
 
@@ -104,7 +182,7 @@ router.post('/:agentId/mark-paid', authMiddleware, async (req, res) => {
     await ChatHistory.findOneAndUpdate(
       { userId: req.user.id, agentId: req.params.agentId },
       { isPaid: true },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     res.json({ success: true });
   } catch (err) {
@@ -112,7 +190,7 @@ router.post('/:agentId/mark-paid', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/chat/:agentId — main chat route (SABSE LAST)
+// POST /api/chat/:agentId — main chat route
 router.post('/:agentId', authMiddleware, async (req, res) => {
   try {
     const { message, history } = req.body;
@@ -135,42 +213,30 @@ router.post('/:agentId', authMiddleware, async (req, res) => {
       });
     }
 
-    if (agent.price > 0 && !chatHistory.isPaid) {
-      if (chatHistory.trialCount >= FREE_TRIAL_LIMIT) {
-        return res.status(403).json({
-          trialEnded: true,
-          message: `Free trial ended. Purchase to continue.`,
-        });
-      }
+    // Query limit check
+    const limitCheck = checkQueryLimit(agent, chatHistory);
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        trialEnded: true,
+        message: limitCheck.message,
+      });
     }
 
-    // ← YEH 3 LINES CHANGE HUI HAIN
     const recentHistory = (history || []).slice(-6).map(msg => ({
       role: msg.role,
       content: msg.content,
     }));
 
-    const messages = [
-      { role: 'system', content: agent.systemPrompt },
-      ...recentHistory,
-      { role: 'user', content: message },
-    ];
+    const reply = await getReply(agent, message, recentHistory);
 
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',  // ← CHANGE
-      messages,
-      max_tokens: 1024,  // ← CHANGE
-    });
-
-    const reply = response.choices[0].message.content;
-
-    if (agent.price > 0 && !chatHistory.isPaid) {
+    // Trial count badhao
+    if (['one-time', 'monthly', 'yearly'].includes(agent.pricingModel) && !chatHistory.isPaid) {
       chatHistory.trialCount += 1;
     }
 
     chatHistory.messages.push(
-      { role: 'user', content: message },
-      { role: 'assistant', content: reply }
+      { role: 'user', content: message, timestamp: new Date() },
+      { role: 'assistant', content: reply, timestamp: new Date() }
     );
     await chatHistory.save();
 
