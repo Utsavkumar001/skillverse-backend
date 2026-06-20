@@ -5,9 +5,13 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['buyer', 'creator', 'both'], default: 'buyer' },
+    role: { 
+      type: String, 
+      enum: ['user', 'creator', 'admin'], 
+      default: 'user' 
+    },
     avatar: { type: String, default: '' },
-    isVerified: { type: Boolean, default: false }, 
+    isVerified: { type: Boolean, default: false },
     resetToken: { type: String, default: null },
     resetTokenExpiry: { type: Date, default: null },
     walletBalance: { type: Number, default: 0 },
@@ -22,11 +26,24 @@ const UserSchema = new mongoose.Schema(
     ],
     isEmailVerified: { type: Boolean, default: false },
     emailVerifyToken: { type: String, default: null },
-    role: { type: String, enum: ['buyer', 'creator', 'both', 'admin'], default: 'buyer' },
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: null },
+
+    // Creator Application
+    creatorStatus: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'rejected'],
+      default: 'none'
+    },
+    creatorApplication: {
+      expertise: { type: String, default: '' },
+      reason: { type: String, default: '' },
+      portfolio: { type: String, default: '' },
+      linkedin: { type: String, default: '' },
+      appliedAt: { type: Date, default: null },
+      rejectionReason: { type: String, default: '' },
+    },
   },
-  
   { timestamps: true }
 );
 

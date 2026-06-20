@@ -44,7 +44,6 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
     const user = await User.findById(req.user.id);
-
     if (agent.creatorId.toString() !== req.user.id.toString() && user.role !== 'admin') {
       return res.status(403).json({ message: 'Not your agent' });
     }
@@ -85,11 +84,7 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
       : 0;
 
     res.json({
-      totalUsers,
-      paidUsers,
-      totalMessages,
-      revenue,
-      avgRating,
+      totalUsers, paidUsers, totalMessages, revenue, avgRating,
       reviewCount: reviews.length,
       usageCount: agent.usageCount,
       last7Days,
@@ -126,33 +121,39 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (user.role !== 'creator' && user.role !== 'admin') {
       return res.status(403).json({
-        message: 'Only creators can build agents.',
+        message: 'Only verified creators can build agents.',
         code: 'NOT_CREATOR',
       });
     }
 
-    const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
+    const {
+      title, description, category, systemPrompt, examplePrompts,
+      price, monthlyPrice, yearlyPrice, pricingModel,
+      freeQueriesPerDay, freeQueriesPerMonth,
+      agentType, externalApiUrl,
+      tags, capabilities,
+    } = req.body;
 
     const agent = await Agent.create({
-    title,
-    description,
-    category,
-    systemPrompt: systemPrompt || '',
-    examplePrompts,
-    price: price || 0,
-    monthlyPrice: monthlyPrice || 0,
-    yearlyPrice: yearlyPrice || 0,
-    pricingModel: pricingModel || 'free',
-    freeQueriesPerDay: freeQueriesPerDay || 0,
-    freeQueriesPerMonth: freeQueriesPerMonth || 0,
-    agentType: agentType || 'internal',
-    externalApiUrl: externalApiUrl || '',
-    capabilities: capabilities || [],
-    tags,
-    creatorId: req.user.id,
-    isPublished: false,
-    status: 'draft',
-  });
+      title,
+      description,
+      category,
+      systemPrompt: systemPrompt || '',
+      examplePrompts: examplePrompts || [],
+      price: price || 0,
+      monthlyPrice: monthlyPrice || 0,
+      yearlyPrice: yearlyPrice || 0,
+      pricingModel: pricingModel || 'free',
+      freeQueriesPerDay: freeQueriesPerDay || 0,
+      freeQueriesPerMonth: freeQueriesPerMonth || 0,
+      agentType: agentType || 'internal',
+      externalApiUrl: externalApiUrl || '',
+      capabilities: capabilities || [],
+      tags: tags || [],
+      creatorId: req.user.id,
+      isPublished: false,
+      status: 'draft',
+    });
 
     res.status(201).json(agent);
   } catch (err) {
@@ -210,7 +211,13 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Not your agent' });
     }
 
-    const { title, description, category, systemPrompt, examplePrompts, price, pricingModel, tags, capabilities } = req.body;
+    const {
+      title, description, category, systemPrompt, examplePrompts,
+      price, monthlyPrice, yearlyPrice, pricingModel,
+      freeQueriesPerDay, freeQueriesPerMonth,
+      agentType, externalApiUrl,
+      tags, capabilities,
+    } = req.body;
 
     agent.title = title || agent.title;
     agent.description = description || agent.description;
@@ -218,7 +225,13 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     agent.systemPrompt = systemPrompt || agent.systemPrompt;
     agent.examplePrompts = examplePrompts || agent.examplePrompts;
     agent.price = price !== undefined ? price : agent.price;
+    agent.monthlyPrice = monthlyPrice !== undefined ? monthlyPrice : agent.monthlyPrice;
+    agent.yearlyPrice = yearlyPrice !== undefined ? yearlyPrice : agent.yearlyPrice;
     agent.pricingModel = pricingModel || agent.pricingModel;
+    agent.freeQueriesPerDay = freeQueriesPerDay !== undefined ? freeQueriesPerDay : agent.freeQueriesPerDay;
+    agent.freeQueriesPerMonth = freeQueriesPerMonth !== undefined ? freeQueriesPerMonth : agent.freeQueriesPerMonth;
+    agent.agentType = agentType || agent.agentType;
+    agent.externalApiUrl = externalApiUrl !== undefined ? externalApiUrl : agent.externalApiUrl;
     agent.tags = tags || agent.tags;
     agent.capabilities = capabilities || agent.capabilities;
 
@@ -239,6 +252,10 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Please verify your email first.' });
     }
 
+    if (user.role !== 'creator' && user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only creators can clone agents.' });
+    }
+
     const original = await Agent.findById(req.params.id);
     if (!original) return res.status(404).json({ message: 'Agent not found' });
 
@@ -250,7 +267,13 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
       examplePrompts: original.examplePrompts,
       capabilities: original.capabilities,
       price: original.price,
+      monthlyPrice: original.monthlyPrice,
+      yearlyPrice: original.yearlyPrice,
       pricingModel: original.pricingModel,
+      freeQueriesPerDay: original.freeQueriesPerDay,
+      freeQueriesPerMonth: original.freeQueriesPerMonth,
+      agentType: original.agentType,
+      externalApiUrl: original.externalApiUrl,
       tags: original.tags,
       creatorId: req.user.id,
       isPublished: false,
