@@ -131,7 +131,7 @@ router.post('/', authMiddleware, async (req, res) => {
       price, monthlyPrice, yearlyPrice, pricingModel,
       freeQueriesPerDay, freeQueriesPerMonth,
       agentType, externalApiUrl,
-      tags, capabilities,
+      tags, capabilities, knowledgeSources
     } = req.body;
 
     const agent = await Agent.create({
@@ -150,6 +150,7 @@ router.post('/', authMiddleware, async (req, res) => {
       externalApiUrl: externalApiUrl || '',
       capabilities: capabilities || [],
       tags: tags || [],
+      knowledgeSources: knowledgeSources || [],
       creatorId: req.user.id,
       isPublished: false,
       status: 'draft',
@@ -216,7 +217,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       price, monthlyPrice, yearlyPrice, pricingModel,
       freeQueriesPerDay, freeQueriesPerMonth,
       agentType, externalApiUrl,
-      tags, capabilities,
+      tags, capabilities, knowledgeSources
     } = req.body;
 
     agent.title = title || agent.title;
@@ -233,6 +234,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     agent.agentType = agentType || agent.agentType;
     agent.externalApiUrl = externalApiUrl !== undefined ? externalApiUrl : agent.externalApiUrl;
     agent.tags = tags || agent.tags;
+    agent.knowledgeSources = knowledgeSources || agent.knowledgeSources;
     agent.capabilities = capabilities || agent.capabilities;
 
     await agent.save();

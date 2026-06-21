@@ -12,6 +12,8 @@ const AgentSchema = new mongoose.Schema(
     systemPrompt: { type: String, default: '' },
     examplePrompts: [{ type: String }],
     creatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+
+    
     
     // Pricing
     price: { type: Number, default: 0 },

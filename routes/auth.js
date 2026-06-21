@@ -68,7 +68,7 @@ router.post('/register', validateRegister, checkValidation, async (req, res) => 
       name,
       email: email.toLowerCase(),
       password: hashed,
-      role: role || 'buyer',
+      role: 'user',
       emailVerifyToken,
       isEmailVerified: false,
     });
