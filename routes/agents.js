@@ -306,6 +306,37 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+
+// PATCH /api/agents/:id/changelog — add new version
+router.patch('/:id/changelog', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+
+    if (agent.creatorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: 'Not your agent' });
+    }
+
+    const { version, changes } = req.body;
+
+    if (!version || !changes?.length) {
+      return res.status(400).json({ message: 'Version and changes are required' });
+    }
+
+    agent.version = version;
+    agent.changelog.unshift({
+      version,
+      date: new Date(),
+      changes,
+    });
+
+    await agent.save();
+    res.json({ message: 'Changelog updated!', agent });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 });
 
 module.exports = router;

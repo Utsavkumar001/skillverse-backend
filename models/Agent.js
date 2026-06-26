@@ -13,8 +13,6 @@ const AgentSchema = new mongoose.Schema(
     examplePrompts: [{ type: String }],
     creatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
-    
-    
     // Pricing
     price: { type: Number, default: 0 },
     monthlyPrice: { type: Number, default: 0 },
@@ -37,11 +35,33 @@ const AgentSchema = new mongoose.Schema(
     averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
     capabilities: [{ type: String }],
+    
+    // Knowledge Sources ← YAHI MISSING THA
+    knowledgeSources: [{
+      type: String,
+      enum: [
+        'Books', 'Research Papers', 'Personal Notes',
+        'Company SOPs', 'Videos', 'PDFs',
+        'Fine-tuned Model', 'External API',
+        'IIT/University Notes', 'GATE/Exam PYQs'
+      ],
+    }],
+
     status: {
       type: String,
       enum: ['draft', 'pending_review', 'published', 'rejected'],
       default: 'draft'
     },
+
+    // Versioning
+    version: { type: String, default: '1.0' },
+    changelog: [
+      {
+        version: { type: String },
+        date: { type: Date, default: Date.now },
+        changes: [{ type: String }],
+      }
+    ],
   },
   { timestamps: true }
 );
