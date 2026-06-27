@@ -3,23 +3,19 @@ const router = express.Router();
 const Agent = require('../models/Agent');
 const authMiddleware = require('../middleware/auth');
 
-// GET /api/agents — list all published agents
+// GET /api/agents
 router.get('/', async (req, res) => {
   try {
     const { category, search, sort } = req.query;
     const query = { isPublished: true };
-
     if (category) query.category = category;
     if (search) query.title = { $regex: search, $options: 'i' };
-
     let sortObj = { createdAt: -1 };
     if (sort === 'rating') sortObj = { averageRating: -1 };
     if (sort === 'popular') sortObj = { usageCount: -1 };
-
     const agents = await Agent.find(query)
       .populate('creatorId', 'name avatar isVerified')
       .sort(sortObj);
-
     res.json(agents);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -42,25 +38,20 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
     const User = require('../models/User');
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-
     const user = await User.findById(req.user.id);
     if (agent.creatorId.toString() !== req.user.id.toString() && user.role !== 'admin') {
       return res.status(403).json({ message: 'Not your agent' });
     }
-
     const ChatHistory = require('../models/ChatHistory');
     const Review = require('../models/Review');
-
     const chats = await ChatHistory.find({ agentId: req.params.id });
     const reviews = await Review.find({ agentId: req.params.id });
-
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dayStart = new Date(date.setHours(0, 0, 0, 0));
       const dayEnd = new Date(date.setHours(23, 59, 59, 999));
-
       const msgs = chats.reduce((count, chat) => {
         return count + chat.messages.filter(m =>
           new Date(m.timestamp) >= dayStart &&
@@ -68,13 +59,11 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
           m.role === 'user'
         ).length;
       }, 0);
-
       last7Days.push({
         date: dayStart.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
         messages: msgs,
       });
     }
-
     const paidUsers = chats.filter(c => c.isPaid).length;
     const totalUsers = chats.length;
     const totalMessages = chats.reduce((sum, c) => sum + Math.floor(c.messages.length / 2), 0);
@@ -82,7 +71,6 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
     const avgRating = reviews.length
       ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
       : 0;
-
     res.json({
       totalUsers, paidUsers, totalMessages, revenue, avgRating,
       reviewCount: reviews.length,
@@ -94,7 +82,7 @@ router.get('/:id/analytics', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/agents/:id — single agent
+// GET /api/agents/:id
 router.get('/:id', async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id)
@@ -111,33 +99,20 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
-
     if (!user.isEmailVerified) {
-      return res.status(403).json({
-        message: 'Please verify your email before creating agents.',
-        code: 'EMAIL_NOT_VERIFIED',
-      });
+      return res.status(403).json({ message: 'Please verify your email before creating agents.', code: 'EMAIL_NOT_VERIFIED' });
     }
-
     if (user.role !== 'creator' && user.role !== 'admin') {
-      return res.status(403).json({
-        message: 'Only verified creators can build agents.',
-        code: 'NOT_CREATOR',
-      });
+      return res.status(403).json({ message: 'Only verified creators can build agents.', code: 'NOT_CREATOR' });
     }
-
     const {
       title, description, category, systemPrompt, examplePrompts,
       price, monthlyPrice, yearlyPrice, pricingModel,
       freeQueriesPerDay, freeQueriesPerMonth,
-      agentType, externalApiUrl,
-      tags, capabilities, knowledgeSources
+      agentType, externalApiUrl, tags, capabilities, knowledgeSources
     } = req.body;
-
     const agent = await Agent.create({
-      title,
-      description,
-      category,
+      title, description, category,
       systemPrompt: systemPrompt || '',
       examplePrompts: examplePrompts || [],
       price: price || 0,
@@ -155,7 +130,6 @@ router.post('/', authMiddleware, async (req, res) => {
       isPublished: false,
       status: 'draft',
     });
-
     res.status(201).json(agent);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -167,11 +141,9 @@ router.patch('/:id/publish', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
-
     if (user.role !== 'admin') {
       return res.status(403).json({ message: 'Only admin can publish agents.' });
     }
-
     const agent = await Agent.findByIdAndUpdate(
       req.params.id,
       { isPublished: true, status: 'published' },
@@ -188,38 +160,52 @@ router.patch('/:id/submit-review', authMiddleware, async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-
     if (agent.creatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not your agent' });
     }
-
     agent.status = 'pending_review';
     await agent.save();
-
     res.json({ message: 'Submitted for review!', agent });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// PATCH /api/agents/:id — edit agent
+// PATCH /api/agents/:id/changelog ← PEHLE specific routes
+router.patch('/:id/changelog', authMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id);
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    if (agent.creatorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: 'Not your agent' });
+    }
+    const { version, changes } = req.body;
+    if (!version || !changes?.length) {
+      return res.status(400).json({ message: 'Version and changes are required' });
+    }
+    agent.version = version;
+    agent.changelog.unshift({ version, date: new Date(), changes });
+    await agent.save();
+    res.json({ message: 'Changelog updated!', agent });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/agents/:id — edit agent (SABSE LAST generic patch)
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-
     if (agent.creatorId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not your agent' });
     }
-
     const {
       title, description, category, systemPrompt, examplePrompts,
       price, monthlyPrice, yearlyPrice, pricingModel,
       freeQueriesPerDay, freeQueriesPerMonth,
-      agentType, externalApiUrl,
-      tags, capabilities, knowledgeSources
+      agentType, externalApiUrl, tags, capabilities, knowledgeSources
     } = req.body;
-
     agent.title = title || agent.title;
     agent.description = description || agent.description;
     agent.category = category || agent.category;
@@ -236,7 +222,6 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     agent.tags = tags || agent.tags;
     agent.knowledgeSources = knowledgeSources || agent.knowledgeSources;
     agent.capabilities = capabilities || agent.capabilities;
-
     await agent.save();
     res.json(agent);
   } catch (err) {
@@ -249,18 +234,14 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
-
     if (!user.isEmailVerified) {
       return res.status(403).json({ message: 'Please verify your email first.' });
     }
-
     if (user.role !== 'creator' && user.role !== 'admin') {
       return res.status(403).json({ message: 'Only creators can clone agents.' });
     }
-
     const original = await Agent.findById(req.params.id);
     if (!original) return res.status(404).json({ message: 'Agent not found' });
-
     const cloned = await Agent.create({
       title: `${original.title} (Copy)`,
       description: original.description,
@@ -277,11 +258,11 @@ router.post('/:id/clone', authMiddleware, async (req, res) => {
       agentType: original.agentType,
       externalApiUrl: original.externalApiUrl,
       tags: original.tags,
+      knowledgeSources: original.knowledgeSources || [],
       creatorId: req.user.id,
       isPublished: false,
       status: 'draft',
     });
-
     res.status(201).json(cloned);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -294,49 +275,15 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     const User = require('../models/User');
     const agent = await Agent.findById(req.params.id);
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-
     const user = await User.findById(req.user.id);
-
     if (agent.creatorId.toString() !== req.user.id.toString() && user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized' });
     }
-
     await Agent.findByIdAndDelete(req.params.id);
     res.json({ message: 'Agent deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
-
-// PATCH /api/agents/:id/changelog — add new version
-router.patch('/:id/changelog', authMiddleware, async (req, res) => {
-  try {
-    const agent = await Agent.findById(req.params.id);
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
-
-    if (agent.creatorId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: 'Not your agent' });
-    }
-
-    const { version, changes } = req.body;
-
-    if (!version || !changes?.length) {
-      return res.status(400).json({ message: 'Version and changes are required' });
-    }
-
-    agent.version = version;
-    agent.changelog.unshift({
-      version,
-      date: new Date(),
-      changes,
-    });
-
-    await agent.save();
-    res.json({ message: 'Changelog updated!', agent });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 });
 
 module.exports = router;
