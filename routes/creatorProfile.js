@@ -2,14 +2,20 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Agent = require('../models/Agent');
+const authMiddleware = require('../middleware/auth');
 
-// GET /api/creator-profile/:id — creator info
+// GET /api/creator-profile/:id — creator public profile
 router.get('/:id', async (req, res) => {
   try {
     const creator = await User.findById(req.params.id)
-      .select('name isVerified creatorApplication createdAt');
+      .select('name role bio isVerified creatorApplication createdAt');
 
-    if (!creator || creator.role === 'user') {
+    if (!creator) {
+      return res.status(404).json({ message: 'Creator not found' });
+    }
+
+    // Sirf creator aur admin ka profile dikhao
+    if (creator.role !== 'creator' && creator.role !== 'admin') {
       return res.status(404).json({ message: 'Creator not found' });
     }
 
@@ -28,6 +34,23 @@ router.get('/:id/agents', async (req, res) => {
     }).sort({ usageCount: -1 });
 
     res.json(agents);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/creator-profile/update-bio — creator apna bio update kare
+router.patch('/update-bio', authMiddleware, async (req, res) => {
+  try {
+    const { bio, name } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { bio, name },
+      { new: true }
+    ).select('name bio isVerified creatorApplication role');
+
+    res.json(user);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -5,12 +5,13 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { 
-      type: String, 
-      enum: ['user', 'creator', 'admin'], 
-      default: 'user' 
+    role: {
+      type: String,
+      enum: ['user', 'creator', 'admin'],
+      default: 'user'
     },
     avatar: { type: String, default: '' },
+    bio: { type: String, default: '' }, // ← Creator bio
     isVerified: { type: Boolean, default: false },
     resetToken: { type: String, default: null },
     resetTokenExpiry: { type: Date, default: null },
