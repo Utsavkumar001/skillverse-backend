@@ -250,10 +250,10 @@ router.get('/stats', authMiddleware, async (req, res) => {
 // PATCH /api/auth/update-profile
 router.patch('/update-profile', authMiddleware, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, bio } = req.body;
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { name },
+      { name, bio },
       { new: true }
     ).select('-password');
     res.json(user);
